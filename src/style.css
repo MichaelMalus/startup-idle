@@ -38,3 +38,15 @@ select { font: inherit; font-size: 12px; background: var(--panel); color: var(--
 footer { padding: 8px 16px 24px; color: var(--dim); font-size: 12px; max-width: 1100px; }
 footer div:first-child { color: var(--text); }
 @media (max-width: 700px) { .layout { grid-template-columns: 1fr; } }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.cols h2 { margin-top: 0; }
+.bar { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; min-width: 60px; }
+.bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s linear; }
+.prog { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.prog > span:first-child { width: 70px; font-size: 12px; }
+.prog > span:last-child { font-size: 12px; min-width: 110px; text-align: right; }
+.tag { font-size: 11px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 10px; color: var(--dim); }
+.small { font-size: 12px; }
+.hint { padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--panel); }
+.card > .dim + .dim { margin-top: 4px; }
+@media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }

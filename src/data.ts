@@ -1,115 +1,134 @@
-// All balance numbers live here. 1 game second = 1 day.
+// All balance numbers live here. Rates are per game day.
+
+export const DAYS_PER_SECOND = 0.5;
 
 export type Era = 'garage' | 'dotcom';
 export const ERA_NAMES: Record<Era, string> = { garage: 'Garage (1999)', dotcom: 'Dot-com boom' };
 
-export type Role = 'eng' | 'qa' | 'ops' | 'mgr';
-export interface RoleDef { name: string; plural: string; fee: number; salary: number; unlock?: string; desc: string }
-export const ROLES: Record<Role, RoleDef> = {
-  eng: { name: 'Engineer', plural: 'Engineers', fee: 500, salary: 100, desc: 'Writes 4 SLoC/day. Also writes bugs.' },
-  qa: { name: 'Tester', plural: 'Testers', fee: 400, salary: 70, unlock: 'tester', desc: 'Fixes 2 bugs/day. First to be laid off.' },
-  ops: { name: 'Sysadmin', plural: 'Sysadmins', fee: 600, salary: 110, unlock: 'pager', desc: 'Keeps 3 load of services up. Sleeps with a pager.' },
-  mgr: { name: 'Manager', plural: 'Managers', fee: 1000, salary: 160, unlock: 'middle', desc: 'Writes nothing. Lets a team grow 6 bigger before Brooks\'s law bites.' },
+export type Skill = 'coding' | 'testing' | 'ops' | 'sales' | 'management';
+export const SKILLS: Record<Skill, { name: string; unlock?: string; desc: string }> = {
+  coding: { name: 'Coding', desc: 'Builds things. Also builds bugs.' },
+  testing: { name: 'Testing', unlock: 'bugzilla', desc: 'Finds and fixes bugs, mostly by clicking everything.' },
+  ops: { name: 'Ops', unlock: 'pager', desc: 'Keeps live services up. Owns a pager.' },
+  sales: { name: 'Sales', unlock: 'incorporate', desc: 'Turns PowerPoint into hype.' },
+  management: { name: 'Management', unlock: 'middle', desc: 'Lets a team grow without Brooks\'s law biting. Writes nothing.' },
 };
 
-export const FOUNDERS = 2;
-export const FOUNDER_SLOC = 0.2; // per founder per day
-export const FOUNDER_OPS = 1; // load each founder can keep up
-export const ENG_SLOC = 4; // per engineer per day
-export const CLICK_SLOC = 1;
-export const CLICK_HYPE = 1;
-export const START_CASH = 10000;
-export const START_DESKS = 4;
-export const DESK_BASE_COST = 2000;
-export const DESK_GROWTH = 1.25;
-export const OFFICE_FLOOR = { cost: 150000, desks: 12, rent: 1500 };
-export const TEAM_SIZE_LIMIT = 7;
-export const MGR_SIZE_BONUS = 6;
-export const BUGS_PER_SLOC = 0.015;
-export const DEBT_PER_SLOC = 0.02;
-export const DEBT_SCALE = 10000; // output halves at this much debt
-export const BUG_SCALE = 200; // user target halves at this many bugs
-export const INFRA_PER_LOAD = 5; // $/day
-export const USER_GROWTH = 0.05; // fraction of gap closed per day
+export interface TraitDef { name: string; desc: string; output?: number; learn?: number; bugs?: number; salary?: number; team?: number }
+export const TRAITS: Record<string, TraitDef> = {
+  tenx: { name: '10x (self-reported)', desc: 'Output ×1.5, bugs ×2', output: 1.5, bugs: 2 },
+  jerk: { name: 'Brilliant jerk', desc: 'Output ×1.6, teammates ×0.9', output: 1.6, team: 0.9 },
+  learner: { name: 'Fast learner', desc: 'Skills improve 2× faster', learn: 2 },
+  meetings: { name: 'Loves meetings', desc: 'Output ×0.8, management improves 3× faster', output: 0.8 },
+  owl: { name: 'Night owl', desc: 'Output ×1.2', output: 1.2 },
+  cowboy: { name: 'Cowboy', desc: 'Output ×1.3, bugs ×1.5', output: 1.3, bugs: 1.5 },
+  overqualified: { name: 'Overqualified', desc: 'Salary ×1.5, learns slowly', salary: 1.5, learn: 0.5 },
+  steady: { name: 'Steady', desc: 'Bugs ×0.6', bugs: 0.6 },
+};
+
+export const FIRST_NAMES = ['Alex', 'Sam', 'Priya', 'Jordan', 'Wei', 'Olu', 'Maria', 'Dev', 'Chris', 'Fatima', 'Tom', 'Aisha', 'Kenji', 'Lena', 'Raj', 'Sofia', 'Ben', 'Nadia', 'Marcus', 'Yuki', 'Ivan', 'Grace', 'Omar', 'Hannah', 'Luis', 'Zoe', 'Tariq', 'Elin', 'Kwame', 'Rosa'];
+export const LAST_NAMES = ['Smith', 'Patel', 'Chen', 'Okafor', 'Garcia', 'Kowalski', 'Nguyen', 'Müller', 'Silva', 'Jones', 'Khan', 'Tanaka', 'Novak', 'Haddad', 'Larsen', 'Mensah', 'Rossi', 'Kim', 'Byrne', 'Costa'];
+
+export const START_CASH = 5000;
+export const START_DESKS = 3;
+export const SKILL_GROWTH = 0.012; // level gained per day of use at level 1 (slows as level rises)
+export const SALARY_BASE = 30;
+export const SALARY_PER_SKILL = 35;
+export const HIRE_FEE_DAYS = 10; // recruiting fee = this many days of salary
+export const CANDIDATE_EVERY = 8; // days
+export const MAX_CANDIDATES = 4;
+export const TEAM_UNLOCK = 4; // headcount at which Teams appear
+export const TEAM_LIMIT = 5;
+export const TEAM_LIMIT_PER_MGMT = 4;
 export const HYPE_PER_USER = 0.002;
+export const HYPE_PER_SALES = 1;
+export const USER_GROWTH = 0.05;
+export const BUG_SCALE = 40; // a service's users halve at this many bugs
+export const BUGS_PER_WORK = 0.05; // bugs left behind per unit of coding work
+export const FIX_CODING = 0.3; // bugs fixed per coding level per day while maintaining
+export const FIX_TESTING = 1;
+export const OPS_PER_CODING = 0.5; // load kept up per coding level
+export const OPS_PER_OPS = 3;
+export const BASE_CAPACITY = 1; // load a service survives with nobody on it
+export const INFRA_PER_LOAD = 5;
+export const DESK_BASE_COST = 1500;
+export const DESK_GROWTH = 1.2;
+export const OFFICE_FLOOR = { cost: 150000, desks: 12, rent: 1500 };
 
-export interface ServiceDef { name: string; sloc: number; users: number; load: number; unlock?: string; desc: string }
+export type Work = Partial<Record<Skill, number>>;
+
+export interface ServiceDef { name: string; work: Work; users: number; load: number; bugRate: number; req?: string[]; desc: string }
 export const SERVICES: Record<string, ServiceDef> = {
-  landing: { name: 'Landing page', sloc: 40, users: 250, load: 1, desc: 'A logo, a mailing list, and "Coming soon".' },
-  signup: { name: 'Signup flow', sloc: 200, users: 1250, load: 1, desc: 'Collects emails. Validates nothing.' },
-  forum: { name: 'Community forum', sloc: 800, users: 6000, load: 2, unlock: 'php', desc: 'Free content, generated by users, moderated by nobody.' },
-  guestbook: { name: 'Guestbook & hit counter', sloc: 400, users: 2000, load: 1, unlock: 'perl', desc: 'Visitor #000042 says hi.' },
-  cart: { name: 'Shopping cart', sloc: 2500, users: 20000, load: 3, unlock: 'ecommerce', desc: 'Pets, delivered. Margins, negative.' },
-  wap: { name: 'WAP site', sloc: 4000, users: 30000, load: 2, unlock: 'wap', desc: 'The mobile web, at 9.6 kbit/s.' },
-  search: { name: 'Search engine', sloc: 10000, users: 100000, load: 5, unlock: 'dotcom', desc: 'Like the others, but with fewer banner ads. For now.' },
-  portal: { name: 'Web portal', sloc: 30000, users: 400000, load: 10, unlock: 'portal', desc: 'News, weather, horoscopes, email. Everything except a reason to stay.' },
+  landing: { name: 'Landing page', work: { coding: 10 }, users: 100, load: 1, bugRate: 0.05, desc: 'A logo, a mailing list, and "Coming soon".' },
+  signup: { name: 'Signup flow', work: { coding: 30 }, users: 400, load: 1, bugRate: 0.1, req: ['svc:landing'], desc: 'Collects emails. Validates nothing.' },
+  forum: { name: 'Community forum', work: { coding: 100 }, users: 1500, load: 2, bugRate: 0.2, req: ['php'], desc: 'Free content, generated by users, moderated by nobody.' },
+  guestbook: { name: 'Guestbook & hit counter', work: { coding: 60 }, users: 700, load: 1, bugRate: 0.1, req: ['perl'], desc: 'Visitor #000042 says hi.' },
+  cart: { name: 'Shopping cart', work: { coding: 400, testing: 120 }, users: 8000, load: 3, bugRate: 0.5, req: ['ecommerce'], desc: 'Pets, delivered. Margins, negative.' },
+  wap: { name: 'WAP site', work: { coding: 500, testing: 100 }, users: 12000, load: 2, bugRate: 0.4, req: ['wap'], desc: 'The mobile web, at 9.6 kbit/s.' },
+  search: { name: 'Search engine', work: { coding: 1500, testing: 300, ops: 200 }, users: 40000, load: 5, bugRate: 1, req: ['dotcom'], desc: 'Like the others, but with fewer banner ads. For now.' },
+  portal: { name: 'Web portal', work: { coding: 4000, testing: 800, ops: 500 }, users: 150000, load: 10, bugRate: 2, req: ['portal'], desc: 'News, weather, horoscopes, email. Everything except a reason to stay.' },
 };
-export const SERVICE_LEVEL_COST = 2.5; // each level costs this much more
-export const SERVICE_LEVEL_USERS = 2; // and gives this much more users
+export const VERSION_WORK = 3; // each new version needs this much more work
+export const VERSION_USERS = 2; // and doubles users
+
+export interface Mods {
+  coding: number; testing: number; ops: number; sales: number; users: number; hype: number;
+  bugs: number; salary: number; arpu: number; learn: number;
+}
+export const baseMods = (): Mods => ({ coding: 1, testing: 1, ops: 1, sales: 1, users: 1, hype: 1, bugs: 1, salary: 1, arpu: 0, learn: 1 });
+
+// Tech is built as a project with skill work; policies are bought with cash.
+export interface UpgradeDef {
+  name: string; kind: 'tech' | 'policy'; era: Era; work?: Work; cash?: number; req?: string[]; funding?: number;
+  desc: string; effect?: (m: Mods) => void; dilution?: number;
+}
+export const UPGRADES: Record<string, UpgradeDef> = {
+  // Garage — tech
+  cvs: { name: 'CVS', kind: 'tech', era: 'garage', work: { coding: 15 }, req: ['svc:landing'], desc: 'Version control, technically. Coding +20%.', effect: m => { m.coding *= 1.2; } },
+  php: { name: 'PHP 4', kind: 'tech', era: 'garage', work: { coding: 25 }, req: ['svc:signup'], desc: 'Unlocks Community forum. register_globals = On.' },
+  bugzilla: { name: 'Bugzilla', kind: 'tech', era: 'garage', work: { coding: 30 }, req: ['svc:signup'], desc: 'Unlocks the Testing skill. Now the bugs have numbers.' },
+  perl: { name: 'Perl CGI scripts', kind: 'tech', era: 'garage', work: { coding: 40 }, req: ['php'], desc: 'Unlocks Guestbook. Ops +25%. Write-only code.', effect: m => { m.ops *= 1.25; } },
+  ftp: { name: 'Deploy via FTP', kind: 'tech', era: 'garage', work: { coding: 30 }, req: ['cvs'], desc: 'Cowboy deploys: coding +25%, bugs +50%.', effect: m => { m.coding *= 1.25; m.bugs *= 1.5; } },
+  ads: { name: 'Banner ads', kind: 'tech', era: 'garage', work: { coding: 50 }, req: ['incorporate'], desc: 'Users finally earn $0.02/day each. Punch the monkey!', effect: m => { m.arpu += 0.02; } },
+  // Garage — policies
+  incorporate: { name: 'Incorporate in Delaware', kind: 'policy', era: 'garage', cash: 500, req: ['svc:signup'], desc: 'Unlocks hiring, sales and fundraising. You now have a board.' },
+  pager: { name: 'Buy a pager', kind: 'policy', era: 'garage', cash: 1500, req: ['incorporate'], desc: 'Unlocks the Ops skill. Weekends are now optional.' },
+  crunch: { name: 'Crunch culture', kind: 'policy', era: 'garage', cash: 0, req: ['incorporate'], desc: 'Output +25%, bugs +25%. Sleep is for the funded.', effect: m => { m.coding *= 1.25; m.testing *= 1.25; m.ops *= 1.25; m.bugs *= 1.25; } },
+  coworking: { name: 'Co-working space', kind: 'policy', era: 'garage', cash: 3000, req: ['incorporate'], desc: 'Unlocks renting desks. Free beer, no doors.' },
+  dotcom: { name: 'Ride the dot-com boom', kind: 'policy', era: 'garage', cash: 100000, funding: 3, desc: 'Advance to the Dot-com era. Unlocks Search engine. What could go wrong?' },
+  // Dot-com — tech
+  java: { name: 'Java EE', kind: 'tech', era: 'dotcom', work: { coding: 300 }, desc: 'Coding +50%, bugs +20%. AbstractSingletonProxyFactoryBean.', effect: m => { m.coding *= 1.5; m.bugs *= 1.2; } },
+  soap: { name: 'SOAP & XML', kind: 'tech', era: 'dotcom', work: { coding: 500 }, req: ['java'], desc: 'Users +30%. Envelopes inside envelopes.', effect: m => { m.users *= 1.3; } },
+  junit: { name: 'JUnit', kind: 'tech', era: 'dotcom', work: { coding: 250, testing: 100 }, req: ['java'], desc: 'Bugs −40%. Tests that mostly pass.', effect: m => { m.bugs *= 0.6; } },
+  ecommerce: { name: 'E-commerce', kind: 'tech', era: 'dotcom', work: { coding: 400 }, desc: 'Unlocks Shopping cart. Users earn +$0.05/day.', effect: m => { m.arpu += 0.05; } },
+  wap: { name: 'WAP', kind: 'tech', era: 'dotcom', work: { coding: 600 }, req: ['ecommerce'], desc: 'Unlocks WAP site. Mobile is the future (in about eight years).' },
+  portal: { name: 'Portal strategy', kind: 'tech', era: 'dotcom', work: { coding: 1200 }, req: ['soap'], desc: 'Unlocks Web portal. Be everything to everyone.' },
+  // Dot-com — policies
+  foosball: { name: 'Foosball table', kind: 'policy', era: 'dotcom', cash: 20000, desc: 'Coding +15%. Cheaper than raises.', effect: m => { m.coding *= 1.15; } },
+  aeron: { name: 'Aeron chairs', kind: 'policy', era: 'dotcom', cash: 80000, desc: 'Hype +50%. Investors love a good chair.', effect: m => { m.hype *= 1.5; } },
+  options: { name: 'Stock options', kind: 'policy', era: 'dotcom', cash: 50000, desc: 'Salaries −30%, but you give up 5% equity. Paper millionaires!', effect: m => { m.salary *= 0.7; }, dilution: 0.05 },
+  middle: { name: 'Middle management', kind: 'policy', era: 'dotcom', cash: 100000, desc: 'Unlocks the Management skill. Someone has to schedule the meetings about meetings.' },
+  office: { name: 'Office lease', kind: 'policy', era: 'dotcom', cash: 120000, req: ['coworking'], desc: 'Unlocks office floors (+12 desks, rent applies).' },
+  goldman: { name: 'Hire an investment bank', kind: 'policy', era: 'dotcom', cash: 2000000, funding: 5, desc: 'Unlocks the IPO exit. Fees are a mere 7%.' },
+};
 
 export interface FundingDef { name: string; hype: number; users: number; cash: number; dilution: number; era?: Era }
 export const FUNDING: FundingDef[] = [
-  { name: 'Friends & family', hype: 20, users: 0, cash: 40000, dilution: 0.05 },
-  { name: 'Pre-seed', hype: 80, users: 750, cash: 150000, dilution: 0.1 },
-  { name: 'Seed', hype: 400, users: 5000, cash: 1000000, dilution: 0.15 },
-  { name: 'Series A', hype: 2000, users: 20000, cash: 5000000, dilution: 0.2, era: 'dotcom' },
-  { name: 'Series B', hype: 10000, users: 120000, cash: 25000000, dilution: 0.2, era: 'dotcom' },
+  { name: 'Friends & family', hype: 10, users: 200, cash: 40000, dilution: 0.05 },
+  { name: 'Pre-seed', hype: 50, users: 800, cash: 150000, dilution: 0.1 },
+  { name: 'Seed', hype: 250, users: 2500, cash: 1000000, dilution: 0.15 },
+  { name: 'Series A', hype: 1500, users: 25000, cash: 5000000, dilution: 0.2, era: 'dotcom' },
+  { name: 'Series B', hype: 6000, users: 100000, cash: 25000000, dilution: 0.2, era: 'dotcom' },
 ];
 
-export interface Mods {
-  engMult: number; founderMult: number; opsMult: number; qaMult: number; usersMult: number;
-  hypeMult: number; bugMult: number; debtMult: number; serviceCost: number; salaryMult: number;
-  arpu: number; deskCost: number;
-}
-export const baseMods = (): Mods => ({
-  engMult: 1, founderMult: 1, opsMult: 1, qaMult: 1, usersMult: 1, hypeMult: 1, bugMult: 1,
-  debtMult: 1, serviceCost: 1, salaryMult: 1, arpu: 0, deskCost: 1,
-});
-
-export interface ResearchDef {
-  name: string; era: Era; sloc?: number; cash?: number; req?: string[]; funding?: number;
-  desc: string; effect?: (m: Mods) => void; dilution?: number;
-}
-export const RESEARCH: Record<string, ResearchDef> = {
-  // Garage — tech
-  cvs: { name: 'CVS', era: 'garage', sloc: 25, desc: 'Version control, technically. Engineers +25%.', effect: m => { m.engMult *= 1.25; m.founderMult *= 1.25; } },
-  php: { name: 'PHP 4', era: 'garage', sloc: 60, desc: 'Unlocks Community forum. register_globals = On.' },
-  perl: { name: 'Perl CGI scripts', era: 'garage', sloc: 120, req: ['php'], desc: 'Unlocks Guestbook. Ops capacity +25%. Write-only code.', effect: m => { m.opsMult *= 1.25; } },
-  ftp: { name: 'Deploy via FTP', era: 'garage', sloc: 150, desc: 'Cowboy deploys: services cost 25% less SLoC, +50% bugs.', effect: m => { m.serviceCost *= 0.75; m.bugMult *= 1.5; } },
-  ads: { name: 'Banner ads', era: 'garage', sloc: 300, req: ['incorporate'], desc: 'Users finally earn $0.02/day each. Punch the monkey!', effect: m => { m.arpu += 0.02; } },
-  // Garage — org
-  allnighters: { name: 'All-nighters', era: 'garage', sloc: 40, desc: 'Founders write 2× code. Sleep is for the funded.', effect: m => { m.founderMult *= 2; } },
-  incorporate: { name: 'Incorporate in Delaware', era: 'garage', cash: 500, desc: 'Unlocks hiring and fundraising. You now have a board.' },
-  tester: { name: 'Hire a tester', era: 'garage', sloc: 150, req: ['incorporate'], desc: 'Unlocks Testers. Someone has to click everything.' },
-  pager: { name: 'Buy a pager', era: 'garage', cash: 1500, req: ['incorporate'], desc: 'Unlocks Sysadmins. Weekends are now optional.' },
-  coworking: { name: 'Co-working space', era: 'garage', cash: 3000, req: ['incorporate'], desc: 'Unlocks buying desks. Free beer, no doors.' },
-  dotcom: { name: 'Ride the dot-com boom', era: 'garage', cash: 100000, funding: 3, desc: 'Advance to the Dot-com era. Unlocks Search engine. What could go wrong?' },
-  // Dot-com — tech
-  java: { name: 'Java EE', era: 'dotcom', sloc: 2000, desc: 'Engineers +60%, tech debt +40%. AbstractSingletonProxyFactoryBean.', effect: m => { m.engMult *= 1.6; m.debtMult *= 1.4; } },
-  soap: { name: 'SOAP & XML', era: 'dotcom', sloc: 4000, req: ['java'], desc: 'Services attract 30% more users. Envelopes inside envelopes.', effect: m => { m.usersMult *= 1.3; } },
-  oracle: { name: 'Oracle licence', era: 'dotcom', cash: 400000, desc: 'Ops capacity ×2. Larry thanks you for your business.', effect: m => { m.opsMult *= 2; } },
-  junit: { name: 'JUnit', era: 'dotcom', sloc: 3000, req: ['java'], desc: 'Tech debt −50%, bugs −30%. Tests that mostly pass.', effect: m => { m.debtMult *= 0.5; m.bugMult *= 0.7; } },
-  ecommerce: { name: 'E-commerce', era: 'dotcom', sloc: 2500, desc: 'Unlocks Shopping cart. Users earn +$0.05/day.', effect: m => { m.arpu += 0.05; } },
-  wap: { name: 'WAP', era: 'dotcom', sloc: 5000, desc: 'Unlocks WAP site. Mobile is the future (in about eight years).' },
-  portal: { name: 'Portal strategy', era: 'dotcom', sloc: 12000, req: ['soap'], desc: 'Unlocks Web portal. Be everything to everyone.' },
-  // Dot-com — org
-  foosball: { name: 'Foosball table', era: 'dotcom', cash: 20000, desc: 'Engineers +20%. Cheaper than raises.', effect: m => { m.engMult *= 1.2; } },
-  aeron: { name: 'Aeron chairs', era: 'dotcom', cash: 80000, desc: 'Hype +50%. Investors love a good chair.', effect: m => { m.hypeMult *= 1.5; } },
-  options: { name: 'Stock options', era: 'dotcom', cash: 50000, desc: 'Salaries −30%, but you give up 5% equity. Paper millionaires!', effect: m => { m.salaryMult *= 0.7; }, dilution: 0.05 },
-  middle: { name: 'Middle management', era: 'dotcom', cash: 100000, desc: 'Unlocks Managers. Someone has to schedule the meetings about meetings.' },
-  office: { name: 'Office lease', era: 'dotcom', cash: 120000, req: ['coworking'], desc: 'Unlocks office floors (+12 desks, rent applies).' },
-  goldman: { name: 'Hire an investment bank', era: 'dotcom', cash: 2000000, funding: 5, desc: 'Unlocks the IPO exit. Fees are a mere 7%.' },
-};
-
 export const EVENTS: { msg: string; apply: (g: import('./game').Game) => void; when?: (g: import('./game').Game) => boolean }[] = [
-  { msg: 'A blogger called you "the next big thing". +hype', apply: g => { g.s.hype += 10 + g.s.hype * 0.1; } },
-  { msg: 'The server under your desk got kicked. Bugs everywhere.', apply: g => { g.s.bugs += 20 + g.s.bugs * 0.2; } },
-  { msg: 'A co-founder "refactored" everything over the weekend. +tech debt', apply: g => { g.s.debt += 100 + g.s.debt * 0.1; } },
-  { msg: 'Accountant found a forgotten invoice. −cash', apply: g => { g.s.cash -= Math.min(Math.max(g.s.cash, 0) * 0.05, 50000); } },
-  { msg: 'Slashdotted! Lots of visitors, most of them angry.', apply: g => { g.s.users *= 1.1; g.s.bugs += 30; } },
-  { msg: 'A VC sent you a Palm Pilot. +hype', apply: g => { g.s.hype += 25; }, when: g => g.s.funding >= 1 },
-  { msg: 'Y2K came and went. Your consultants still billed you. −cash', apply: g => { g.s.cash -= Math.min(Math.max(g.s.cash, 0) * 0.03, 30000); } },
-  { msg: 'Someone pushed to production on a Friday. +bugs', apply: g => { g.s.bugs += 15 + g.s.bugs * 0.15; }, when: g => g.headcount() > 0 },
+  { msg: 'A blogger called you "the next big thing". +hype', apply: g => { g.s.hype += 5 + g.s.hype * 0.1; } },
+  { msg: 'The server under your desk got kicked. Bugs everywhere.', apply: g => g.addBugs(5) },
+  { msg: 'Accountant found a forgotten invoice. −cash', apply: g => { g.s.cash -= Math.min(Math.max(g.s.cash, 0) * 0.05, 50000); }, when: g => g.has('incorporate') },
+  { msg: 'Slashdotted! Lots of visitors, most of them angry.', apply: g => { g.s.users *= 1.1; g.addBugs(5); }, when: g => g.s.users > 100 },
+  { msg: 'A VC sent you a Palm Pilot. +hype', apply: g => { g.s.hype += 15; }, when: g => g.s.funding >= 1 },
+  { msg: 'Y2K came and went. Your consultants still billed you. −cash', apply: g => { g.s.cash -= Math.min(Math.max(g.s.cash, 0) * 0.03, 30000); }, when: g => g.has('incorporate') },
+  { msg: 'Someone pushed to production on a Friday. +bugs', apply: g => g.addBugs(8), when: g => g.s.workers.length > 2 },
   { msg: 'Super Bowl ad! It explained nothing. +hype', apply: g => { g.s.hype += g.s.hype * 0.3; }, when: g => g.s.era === 'dotcom' },
   { msg: 'Analysts upgraded you to "Strong Buy" on vibes. +hype', apply: g => { g.s.hype += 100; }, when: g => g.s.era === 'dotcom' },
 ];

@@ -1,42 +1,39 @@
-# Startup Idle — design (proposal)
+# Startup Idle — design
 
-## Shape
-Evolve-style: no big clicky cookie. A dashboard of resources with caps, a growing list of
-actions/hires, a research tree that gates everything, and eras that change the rules.
+A management game with idle pacing. There is no click-to-earn: all progress comes from deciding who works on what.
 
-## Core loop
-1. **Founders** write SLoC by hand at first (a slow manual "Write code" action, as in Evolve's early gathering).
-2. **Hire people** (cost: Cash per month, i.e. ongoing burn, plus a one-off recruiting fee).
-   People are a capped resource — the cap is **Desks** (garage → co-working → office → campus → "remote-first").
-3. **Assign people to teams.** Each team owns one or more **services**. Roles: engineers (SLoC),
-   QA (reduces Bugs), ops/SRE (uptime), product (turns Services into Features), managers
-   (needed above team-size thresholds — Brooks's law penalty without them).
-4. **Services** are built by spending SLoC; each running service produces **Features/Users**,
-   costs infra, generates **Tech Debt** and **Incidents**.
-5. **Users** → **Revenue** (or, more realistically early on, **Hype** → **Funding rounds**).
-6. **Cash** pays salaries and infra. Runway hitting zero = game over for the run.
+## People
+- Every worker is an individual with a name, skills (Coding, Testing, Ops, Sales, Management), a salary and maybe a trait
+  ("10x (self-reported)", "Brilliant jerk", "Loves meetings", "Cowboy", ...).
+- Skills improve through use, more slowly as they get higher.
+- You start with only the Founder: no salary, Coding 1.
+- After incorporating, candidates turn up over time. Hiring costs a recruiting fee and a daily salary, and needs a free desk.
 
-## Resources
-SLoC, Cash, Hype, Users, Bugs, Tech Debt, Morale, Uptime. Most have caps raised by buildings/research (Evolve style).
+## Work
+- Each person has one task: build a service, build a tech upgrade, maintain a live service, or pitch investors.
+- Services and tech are projects that need work in particular skills (a shopping cart needs coding and testing).
+- Live services gain bugs over time and have load. Maintainers fix bugs (testing, or coding at a lower rate) and
+  keep them up (ops, or coding at a lower rate). Bugs and downtime cut a service's users.
+- Shipping a new version of a service needs 3× the work and doubles its users.
+- From 4 people you can form teams; everyone in a team shares its task. Teams bigger than 5 slow down unless someone in
+  them has management skill. Brilliant jerks slow their teammates.
 
-## Eras (progression, each with tech + org upgrades)
+## Company
+- Users bring hype and (after Banner ads) revenue. Hype and users unlock funding rounds, which dilute your equity.
+- Decisions (policies) cost cash: Incorporate, Buy a pager, Crunch culture, Stock options, Middle management, ...
+- Salaries, infrastructure and rent burn cash. Running out ends the run.
+
+## Hidden until nearly unlocked
+Tabs, resources, projects, decisions and funding rounds only appear once you're close to them: when their requirements
+are met, or when you have half the cash or hype they need.
+
+## Eras
 | Era | Tech | Org/social |
 |---|---|---|
-| Garage (~1999) | CVS, LAMP, FTP deploys | Founders in a garage, all-nighters |
-| Dot-com | Java EE, SOAP, Oracle licences | Foosball, stock options, dot-com crash event |
-| Web 2.0 | Git, Rails, AJAX, AWS | Agile Manifesto, open-plan office, "rockstar" job ads |
-| Cloud/Mobile | Docker, Kubernetes, microservices, mobile apps | Scrum, DevOps, Spotify model squads, unlimited PTO |
-| Growth-at-all-costs | Serverless, GraphQL, data lakes | Blitzscaling, perks arms race, OKRs |
-| Remote | Zoom, async tooling | Remote-first, then return-to-office mandates |
-| Efficiency | Copilots, AI agents | "Year of efficiency", layoffs, flattening management |
+| Garage (1999) | CVS, PHP, Bugzilla, Perl, FTP deploys, banner ads | Incorporate, pager, crunch, co-working |
+| Dot-com | Java EE, SOAP, JUnit, e-commerce, WAP, portals | Foosball, Aeron chairs, stock options, middle management, office lease, investment bank |
+| Later (not built) | Git, Rails, AWS, Docker, Kubernetes, microservices, AI agents | Agile, Spotify model, blitzscaling, remote-first, return to office, layoffs |
 
-Upgrades carry trade-offs (microservices: more services per team but more incidents; Agile: faster
-delivery but meetings tax; layoffs: lower burn, morale crash).
-
-## Prestige
-A run ends in an **Exit**: acquihire / IPO / bankruptcy. Earns **Serial Founder Reputation** for
-permanent bonuses; later prestige layers TBD.
-
-## First playable (proposal)
-Garage + Dot-com eras: manual SLoC, hiring, 2–3 team roles, services, Cash/Hype/funding,
-~20 research items, saves + offline progress, deploy to Pages.
+## Exits
+Acquihire (priced on your team's total skill), IPO, or bankruptcy. Exits award reputation, which gives later runs
+more output and starting cash.

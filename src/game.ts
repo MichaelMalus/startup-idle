@@ -1,153 +1,310 @@
 import * as D from './data';
-import type { Role, Mods } from './data';
+import type { Skill, Work, Mods } from './data';
 
-export interface Team { id: number; name: string; eng: number; qa: number; ops: number; mgr: number }
-export interface ServiceState { level: number; team: number | null }
+export interface Worker {
+  id: number; name: string; founder?: boolean; skills: Partial<Record<Skill, number>>;
+  traits: string[]; salary: number; task: string; team: number | null;
+}
+export interface Team { id: number; name: string; task: string }
+export interface Live { version: number; bugs: number }
 export interface State {
-  version: number; day: number; era: D.Era;
-  sloc: number; cash: number; hype: number; users: number; bugs: number; debt: number;
+  version: number; day: number; era: D.Era; cash: number; hype: number; users: number;
   funding: number; equity: number; desksBought: number; floors: number;
-  research: string[]; teams: Team[]; nextTeamId: number; services: Record<string, ServiceState>;
-  reputation: number; exits: number; log: string[]; lastSaved: number; nextEvent: number;
+  done: string[]; progress: Record<string, Work>; pendingBugs: Record<string, number>;
+  services: Record<string, Live>; workers: Worker[]; candidates: Worker[]; teams: Team[];
+  nextId: number; nextCandidate: number; reputation: number; exits: number;
+  log: string[]; lastSaved: number; nextEvent: number;
 }
 
+const SAVE_VERSION = 2;
 const SAVE_KEY = 'startup-idle-save';
 const TEAM_NAMES = ['Core', 'Platform', 'Growth', 'Web', 'Infra', 'Payments', 'Mobile', 'Search', 'Tiger team', 'Special projects'];
+const SKILL_LIST = Object.keys(D.SKILLS) as Skill[];
 
 export function newState(reputation = 0, exits = 0): State {
   return {
-    version: 1, day: 0, era: 'garage', sloc: 0, cash: D.START_CASH * (1 + reputation * 0.1), hype: 0, users: 0,
-    bugs: 0, debt: 0, funding: 0, equity: 1, desksBought: 0, floors: 0, research: [], teams: [],
-    nextTeamId: 1, services: {}, reputation, exits, log: [], lastSaved: Date.now(), nextEvent: 60,
+    version: SAVE_VERSION, day: 0, era: 'garage', cash: D.START_CASH * (1 + reputation * 0.1), hype: 0, users: 0,
+    funding: 0, equity: 1, desksBought: 0, floors: 0, done: [], progress: {}, pendingBugs: {}, services: {},
+    workers: [{ id: 1, name: 'You (Founder)', founder: true, skills: { coding: 1 }, traits: [], salary: 0, task: '', team: null }],
+    candidates: [], teams: [], nextId: 2, nextCandidate: 0, reputation, exits, log: [], lastSaved: Date.now(), nextEvent: 40,
   };
 }
 
+export interface ServiceRates { target: number; uptime: number; load: number; capacity: number; fix: number; bugsIn: number }
 export interface Rates {
-  sloc: number; bugsIn: number; bugsOut: number; debt: number; opsCap: number; load: number; uptime: number;
-  userTarget: number; revenue: number; salaries: number; infra: number; rent: number; hype: number; burn: number;
+  output: Map<number, string>; // per-worker summary
+  projects: Record<string, Work>; // work per day going into each project
+  services: Record<string, ServiceRates>;
+  userTarget: number; hype: number; revenue: number; salaries: number; infra: number; rent: number; burn: number;
 }
+
+const rand = (a: number, b: number) => a + Math.random() * (b - a);
+const pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 
 export class Game {
   s: State;
-  onLog: (msg: string) => void = () => {};
   constructor(s?: State) { this.s = s ?? newState(); }
 
-  has(id: string) { return this.s.research.includes(id); }
+  has(id: string) { return id.startsWith('svc:') ? !!this.s.services[id.slice(4)] : this.s.done.includes(id); }
+  reqsMet(req?: string[]) { return !req || req.every(r => this.has(r)); }
   mods(): Mods {
     const m = D.baseMods();
-    for (const id of this.s.research) D.RESEARCH[id]?.effect?.(m);
+    for (const id of this.s.done) D.UPGRADES[id]?.effect?.(m);
     return m;
   }
   repMult() { return 1 + this.s.reputation * 0.05; }
-  headcount() { return this.s.teams.reduce((n, t) => n + t.eng + t.qa + t.ops + t.mgr, 0); }
+  skillUnlocked(k: Skill) { const u = D.SKILLS[k].unlock; return !u || this.has(u); }
+  headcount() { return this.s.workers.length; }
   desks() { return D.START_DESKS + this.s.desksBought + this.s.floors * D.OFFICE_FLOOR.desks; }
-  deskCost() { return D.DESK_BASE_COST * Math.pow(D.DESK_GROWTH, this.s.desksBought) * this.mods().deskCost; }
-  teamSize(t: Team) { return t.eng + t.qa + t.ops + t.mgr; }
-  teamEff(t: Team) {
-    const limit = D.TEAM_SIZE_LIMIT + t.mgr * D.MGR_SIZE_BONUS;
-    const size = this.teamSize(t);
-    return size <= limit ? 1 : limit / size;
+  deskCost() { return D.DESK_BASE_COST * Math.pow(D.DESK_GROWTH, this.s.desksBought); }
+  trait(w: Worker, f: 'output' | 'learn' | 'bugs' | 'salary') {
+    return w.traits.reduce((x, t) => x * (D.TRAITS[t][f] ?? 1), 1);
   }
-  teamCapacity(t: Team) { return 1 + Math.floor(t.eng / 2); }
-  teamOwned(t: Team) { return Object.values(this.s.services).filter(sv => sv.team === t.id).length; }
-  roleUnlocked(r: Role) { const u = D.ROLES[r].unlock; return this.has('incorporate') && (!u || this.has(u)); }
-  serviceUnlocked(id: string) { const u = D.SERVICES[id].unlock; return !u || this.has(u); }
-  serviceCost(id: string) {
-    const lvl = this.s.services[id]?.level ?? 0;
-    return D.SERVICES[id].sloc * Math.pow(D.SERVICE_LEVEL_COST, lvl) * this.mods().serviceCost;
+  taskOf(w: Worker) {
+    if (w.team !== null) { const t = this.s.teams.find(x => x.id === w.team); if (t) return t.task; }
+    return w.task;
   }
-  // Services owned by a team within its capacity run at full speed; others at 25%.
-  serviceEff(id: string) {
-    const sv = this.s.services[id];
-    if (!sv || sv.team === null) return 0.25;
-    const t = this.s.teams.find(x => x.id === sv.team);
-    if (!t) return 0.25;
-    const owned = Object.entries(this.s.services).filter(([, x]) => x.team === t.id).map(([k]) => k);
-    return owned.indexOf(id) < this.teamCapacity(t) ? 1 : 0.25;
+  teamMembers(id: number) { return this.s.workers.filter(w => w.team === id); }
+  teamLimit(id: number) {
+    const mgmt = this.teamMembers(id).reduce((n, w) => n + (w.skills.management ?? 0), 0);
+    return D.TEAM_LIMIT + mgmt * D.TEAM_LIMIT_PER_MGMT;
+  }
+  teamEff(id: number) {
+    const ms = this.teamMembers(id), limit = this.teamLimit(id);
+    const jerks = ms.filter(w => w.traits.includes('jerk')).length;
+    return (ms.length <= limit ? 1 : limit / ms.length) * Math.pow(0.9, jerks);
+  }
+
+  // ---- projects ----
+  workNeeded(key: string): Work {
+    const [kind, id] = key.split(':');
+    if (kind === 'tech') return D.UPGRADES[id].work ?? {};
+    const def = D.SERVICES[id], v = this.s.services[id]?.version ?? 0;
+    const w: Work = {};
+    for (const k of Object.keys(def.work) as Skill[]) w[k] = def.work[k]! * Math.pow(D.VERSION_WORK, v);
+    return w;
+  }
+  remaining(key: string): Work {
+    const need = this.workNeeded(key), got = this.s.progress[key] ?? {}, r: Work = {};
+    for (const k of Object.keys(need) as Skill[]) { const left = need[k]! - (got[k] ?? 0); if (left > 1e-9) r[k] = left; }
+    return r;
+  }
+  serviceVisible(id: string) { return this.reqsMet(D.SERVICES[id].req); }
+  upgradeVisible(id: string) {
+    const d = D.UPGRADES[id];
+    if (this.has(id) || !this.reqsMet(d.req)) return false;
+    if (d.era === 'dotcom' && this.s.era !== 'dotcom') return false;
+    if (d.funding !== undefined && this.s.funding < d.funding - 1) return false;
+    if (d.kind === 'policy' && d.cash && this.s.cash < d.cash * 0.5) return false;
+    return true;
+  }
+  canBuy(id: string) {
+    const d = D.UPGRADES[id];
+    return d.kind === 'policy' && this.upgradeVisible(id) && this.s.cash >= (d.cash ?? 0) && (d.funding === undefined || this.s.funding >= d.funding);
+  }
+  buy(id: string) {
+    if (!this.canBuy(id)) return;
+    const d = D.UPGRADES[id];
+    this.s.cash -= d.cash ?? 0;
+    this.complete(id);
+  }
+  private complete(id: string) {
+    const d = D.UPGRADES[id];
+    this.s.done.push(id);
+    if (d.dilution) this.s.equity *= 1 - d.dilution;
+    if (id === 'dotcom') { this.s.era = 'dotcom'; this.log('Welcome to the dot-com boom. Profits are so last century.'); }
+    else this.log(`${d.kind === 'tech' ? 'Built' : 'Adopted'} ${d.name}.`);
+    if (id === 'incorporate') this.s.nextCandidate = this.s.day;
+  }
+  // Tasks a worker can be given, as [value, label].
+  taskOptions(): [string, string][] {
+    const o: [string, string][] = [['', 'Idle']];
+    for (const id of Object.keys(D.SERVICES)) {
+      if (!this.serviceVisible(id)) continue;
+      const live = this.s.services[id];
+      o.push([`build:${id}`, live ? `Build ${D.SERVICES[id].name} v${live.version + 1}` : `Build ${D.SERVICES[id].name}`]);
+      if (live) o.push([`maintain:${id}`, `Maintain ${D.SERVICES[id].name}`]);
+    }
+    for (const id of Object.keys(D.UPGRADES)) if (D.UPGRADES[id].kind === 'tech' && this.upgradeVisible(id)) o.push([`tech:${id}`, `Build ${D.UPGRADES[id].name}`]);
+    if (this.skillUnlocked('sales')) o.push(['pitch', 'Pitch investors']);
+    return o;
+  }
+  projectKey(task: string) {
+    const [k, id] = task.split(':');
+    return k === 'build' ? `svc:${id}` : k === 'tech' ? `tech:${id}` : null;
   }
 
   rates(): Rates {
-    const m = this.mods(), s = this.s, rep = this.repMult();
-    const debtPen = 1 / (1 + s.debt / D.DEBT_SCALE);
-    let sloc = D.FOUNDERS * D.FOUNDER_SLOC * m.founderMult * debtPen * rep;
-    let bugsOut = 0, opsCap = D.FOUNDERS * D.FOUNDER_OPS * m.opsMult, salaries = 0;
-    for (const t of s.teams) {
-      const eff = this.teamEff(t);
-      sloc += t.eng * D.ENG_SLOC * m.engMult * eff * debtPen * rep;
-      bugsOut += t.qa * 2 * m.qaMult * eff;
-      opsCap += t.ops * 3 * m.opsMult * eff;
-      for (const r of Object.keys(D.ROLES) as Role[]) salaries += t[r] * D.ROLES[r].salary * m.salaryMult;
-    }
-    let load = 0, userTarget = 0;
+    const s = this.s, m = this.mods(), rep = this.repMult();
+    const out: Rates = { output: new Map(), projects: {}, services: {}, userTarget: 0, hype: 0, revenue: 0, salaries: 0, infra: 0, rent: 0, burn: 0 };
     for (const [id, sv] of Object.entries(s.services)) {
       const def = D.SERVICES[id];
-      load += def.load * sv.level;
-      userTarget += def.users * Math.pow(D.SERVICE_LEVEL_USERS, sv.level - 1) * this.serviceEff(id);
+      out.services[id] = { target: 0, uptime: 1, load: def.load * sv.version, capacity: D.BASE_CAPACITY, fix: 0, bugsIn: def.bugRate * sv.version * m.bugs };
     }
-    const uptime = load === 0 ? 1 : Math.min(1, opsCap / load);
-    userTarget *= m.usersMult * uptime / (1 + s.bugs / D.BUG_SCALE) * rep;
-    const revenue = s.users * m.arpu * uptime;
-    const infra = load * D.INFRA_PER_LOAD;
-    const rent = s.floors * D.OFFICE_FLOOR.rent;
-    const hype = s.users * D.HYPE_PER_USER * m.hypeMult;
-    return {
-      sloc, bugsIn: sloc * D.BUGS_PER_SLOC * m.bugMult, bugsOut, debt: sloc * D.DEBT_PER_SLOC * m.debtMult,
-      opsCap, load, uptime, userTarget, revenue, salaries, infra, rent, hype,
-      burn: salaries + infra + rent - revenue,
-    };
+    for (const w of s.workers) {
+      out.salaries += w.salary * m.salary;
+      const task = this.taskOf(w);
+      const mult = this.trait(w, 'output') * (w.team !== null ? this.teamEff(w.team) : 1) * rep;
+      const lvl = (k: Skill) => (w.skills[k] ?? 0) * m[k as keyof Mods] * mult;
+      const key = this.projectKey(task);
+      if (key) {
+        const rem = this.remaining(key), p = (out.projects[key] ??= {});
+        const parts: string[] = [];
+        for (const k of Object.keys(rem) as Skill[]) {
+          const v = lvl(k);
+          if (v > 0) { p[k] = (p[k] ?? 0) + v; parts.push(`${v.toFixed(1)} ${D.SKILLS[k].name.toLowerCase()}/d`); }
+        }
+        out.output.set(w.id, parts.join(', ') || 'no useful skills for this');
+      } else if (task.startsWith('maintain:')) {
+        const sr = out.services[task.slice(9)];
+        if (sr) {
+          sr.fix += lvl('coding') * D.FIX_CODING + lvl('testing') * D.FIX_TESTING;
+          sr.capacity += lvl('coding') * D.OPS_PER_CODING + (w.skills.ops ?? 0) * m.ops * mult * D.OPS_PER_OPS;
+          out.output.set(w.id, 'keeping it running');
+        }
+      } else if (task === 'pitch') {
+        const h = lvl('sales') * D.HYPE_PER_SALES * m.hype;
+        out.hype += h;
+        out.output.set(w.id, h > 0 ? `${h.toFixed(1)} hype/d` : 'no sales skill');
+      } else out.output.set(w.id, 'idle');
+    }
+    for (const [id, sv] of Object.entries(s.services)) {
+      const def = D.SERVICES[id], sr = out.services[id];
+      sr.uptime = Math.min(1, sr.capacity / sr.load);
+      sr.target = def.users * Math.pow(D.VERSION_USERS, sv.version - 1) * sr.uptime / (1 + sv.bugs / D.BUG_SCALE) * m.users * rep;
+      out.userTarget += sr.target;
+      out.infra += sr.load * D.INFRA_PER_LOAD;
+    }
+    out.hype += s.users * D.HYPE_PER_USER * m.hype;
+    out.revenue = s.users * m.arpu;
+    out.rent = s.floors * D.OFFICE_FLOOR.rent;
+    out.burn = out.salaries + out.infra + out.rent - out.revenue;
+    return out;
   }
 
   tick(dt: number) {
-    const s = this.s, r = this.rates();
+    const s = this.s, r = this.rates(), m = this.mods();
     s.day += dt;
-    s.sloc += r.sloc * dt;
-    s.bugs = Math.max(0, s.bugs + (r.bugsIn - r.bugsOut) * dt);
-    s.debt += r.debt * dt;
+    // project work, and skill growth for whoever did it
+    for (const [key, work] of Object.entries(r.projects)) {
+      const p = (s.progress[key] ??= {});
+      const rem = this.remaining(key);
+      for (const k of Object.keys(work) as Skill[]) {
+        const add = Math.min(work[k]! * dt, rem[k] ?? 0);
+        p[k] = (p[k] ?? 0) + add;
+        if (k === 'coding') s.pendingBugs[key] = (s.pendingBugs[key] ?? 0) + add * D.BUGS_PER_WORK * m.bugs * this.bugFactor(key);
+      }
+      if (Object.keys(this.remaining(key)).length === 0) this.finish(key);
+    }
+    for (const w of s.workers) {
+      const task = this.taskOf(w), key = this.projectKey(task);
+      const used: Skill[] = key ? (Object.keys(this.workNeeded(key)) as Skill[])
+        : task.startsWith('maintain:') ? ['coding', 'testing', 'ops'] : task === 'pitch' ? ['sales'] : [];
+      if (w.team !== null && this.teamMembers(w.team).length > 1) used.push('management');
+      for (const k of used) {
+        const cur = w.skills[k];
+        if (cur === undefined || cur <= 0) continue;
+        const learn = this.trait(w, 'learn') * (k === 'management' && w.traits.includes('meetings') ? 3 : 1) * m.learn;
+        w.skills[k] = cur + D.SKILL_GROWTH * learn * dt / cur;
+      }
+    }
+    for (const [id, sv] of Object.entries(s.services)) {
+      const sr = r.services[id];
+      if (sr) sv.bugs = Math.max(0, sv.bugs + (sr.bugsIn - sr.fix) * dt);
+    }
     s.users += (r.userTarget - s.users) * Math.min(1, D.USER_GROWTH * dt);
     s.hype += r.hype * dt;
     s.cash -= r.burn * dt;
+    if (this.has('incorporate') && s.day >= s.nextCandidate) {
+      s.nextCandidate = s.day + D.CANDIDATE_EVERY;
+      if (s.candidates.length < D.MAX_CANDIDATES) s.candidates.push(this.makeCandidate());
+    }
     s.nextEvent -= dt;
     if (s.nextEvent <= 0) {
-      s.nextEvent = 60 + Math.random() * 90;
+      s.nextEvent = 30 + Math.random() * 45;
       const pool = D.EVENTS.filter(e => !e.when || e.when(this));
-      const e = pool[Math.floor(Math.random() * pool.length)];
-      e.apply(this); this.log(e.msg);
+      const e = pick(pool); e.apply(this); this.log(e.msg);
     }
     if (s.cash < 0) this.exit('bankrupt');
+  }
+  // Average bug multiplier of the people working on a project.
+  private bugFactor(key: string) {
+    const ws = this.s.workers.filter(w => this.projectKey(this.taskOf(w)) === key);
+    return ws.length ? ws.reduce((n, w) => n + this.trait(w, 'bugs'), 0) / ws.length : 1;
+  }
+  private finish(key: string) {
+    const [kind, id] = key.split(':');
+    const bugs = this.s.pendingBugs[key] ?? 0;
+    delete this.s.progress[key]; delete this.s.pendingBugs[key];
+    if (kind === 'tech') { this.complete(id); this.freeWorkers(`tech:${id}`); return; }
+    const sv = this.s.services[id];
+    if (sv) { sv.version++; sv.bugs += bugs; this.log(`Shipped ${D.SERVICES[id].name} v${sv.version}.`); }
+    else { this.s.services[id] = { version: 1, bugs }; this.log(`Shipped ${D.SERVICES[id].name}. It mostly works.`); }
+    this.freeWorkers(`build:${id}`, `maintain:${id}`);
+  }
+  // People on a finished project move to maintaining it (services) or go idle (tech).
+  private freeWorkers(task: string, next = '') {
+    for (const w of this.s.workers) if (w.team === null && w.task === task) w.task = next;
+    for (const t of this.s.teams) if (t.task === task) t.task = next;
+  }
+  addBugs(n: number) {
+    const ids = Object.keys(this.s.services);
+    if (ids.length) this.s.services[pick(ids)].bugs += n;
   }
 
   log(msg: string) {
     this.s.log.unshift(`Day ${Math.floor(this.s.day)}: ${msg}`);
     this.s.log.length = Math.min(this.s.log.length, 30);
-    this.onLog(msg);
   }
 
-  // ---- actions ----
-  writeCode() { this.s.sloc += D.CLICK_SLOC * this.mods().founderMult * this.repMult(); }
-  pitch() { this.s.hype += D.CLICK_HYPE * this.mods().hypeMult; }
+  // ---- people ----
+  makeCandidate(): Worker {
+    const skills = SKILL_LIST.filter(k => this.skillUnlocked(k));
+    const sk: Partial<Record<Skill, number>> = {};
+    const main = Math.random() < 0.5 ? 'coding' : pick(skills);
+    sk[main] = rand(0.6, 2.2);
+    if (Math.random() < 0.4) { const o = pick(skills); sk[o] = (sk[o] ?? 0) + rand(0.3, 1); }
+    const traits: string[] = [];
+    if (Math.random() < 0.7) traits.push(pick(Object.keys(D.TRAITS)));
+    if (traits.includes('overqualified')) for (const k of Object.keys(sk) as Skill[]) sk[k]! += 1;
+    const total = Object.values(sk).reduce((a, b) => a + b!, 0)!;
+    const salary = Math.round((D.SALARY_BASE + D.SALARY_PER_SKILL * total) * traits.reduce((x, t) => x * (D.TRAITS[t].salary ?? 1), 1) * rand(0.85, 1.15));
+    return { id: this.s.nextId++, name: `${pick(D.FIRST_NAMES)} ${pick(D.LAST_NAMES)}`, skills: sk, traits, salary, task: '', team: null };
+  }
+  hireFee(w: Worker) { return w.salary * D.HIRE_FEE_DAYS; }
+  canHire(w: Worker) { return this.headcount() < this.desks() && this.s.cash >= this.hireFee(w); }
+  hire(id: number) {
+    const w = this.s.candidates.find(c => c.id === id);
+    if (!w || !this.canHire(w)) return;
+    this.s.cash -= this.hireFee(w);
+    this.s.candidates = this.s.candidates.filter(c => c !== w);
+    this.s.workers.push(w);
+    this.log(`Hired ${w.name}.`);
+  }
+  reject(id: number) { this.s.candidates = this.s.candidates.filter(c => c.id !== id); }
+  fire(id: number) {
+    const w = this.s.workers.find(x => x.id === id);
+    if (!w || w.founder) return;
+    this.s.workers = this.s.workers.filter(x => x !== w);
+    this.log(`Let ${w.name} go. "We're a family," you remind everyone.`);
+  }
+  setTask(id: number, task: string) { const w = this.s.workers.find(x => x.id === id); if (w) w.task = task; }
+  setTeam(id: number, team: number | null) { const w = this.s.workers.find(x => x.id === id); if (w) w.team = team; }
+  teamsVisible() { return this.headcount() >= D.TEAM_UNLOCK - 1; }
+  newTeam() {
+    if (this.headcount() < D.TEAM_UNLOCK) return;
+    const id = this.s.nextId++;
+    this.s.teams.push({ id, name: TEAM_NAMES[this.s.teams.length % TEAM_NAMES.length], task: '' });
+  }
+  setTeamTask(id: number, task: string) { const t = this.s.teams.find(x => x.id === id); if (t) t.task = task; }
+  disband(id: number) {
+    for (const w of this.teamMembers(id)) w.team = null;
+    this.s.teams = this.s.teams.filter(t => t.id !== id);
+  }
 
-  canResearch(id: string) {
-    const d = D.RESEARCH[id], s = this.s;
-    return !this.has(id) && this.researchVisible(id) && (d.funding === undefined || s.funding >= d.funding) && s.sloc >= (d.sloc ?? 0) && s.cash >= (d.cash ?? 0);
-  }
-  researchVisible(id: string) {
-    const d = D.RESEARCH[id];
-    if (this.has(id)) return false;
-    if (d.era === 'dotcom' && this.s.era !== 'dotcom') return false;
-    if (d.req && !d.req.every(r => this.has(r))) return false;
-    return true;
-  }
-  research(id: string) {
-    if (!this.canResearch(id)) return;
-    const d = D.RESEARCH[id];
-    this.s.sloc -= d.sloc ?? 0; this.s.cash -= d.cash ?? 0;
-    this.s.research.push(id);
-    if (d.dilution) this.s.equity *= 1 - d.dilution;
-    if (id === 'dotcom') { this.s.era = 'dotcom'; this.log('Welcome to the dot-com boom. Profits are so last century.'); }
-    else this.log(`Adopted ${d.name}.`);
-  }
-
+  // ---- company ----
   nextRound() { return D.FUNDING[this.s.funding]; }
+  roundVisible() { const f = this.nextRound(); return !!f && this.has('incorporate') && this.s.hype >= f.hype * 0.5; }
   canRaise() {
     const f = this.nextRound();
     return !!f && this.has('incorporate') && (!f.era || f.era === this.s.era) && this.s.hype >= f.hype && this.s.users >= f.users;
@@ -158,79 +315,29 @@ export class Game {
     this.s.hype -= f.hype; this.s.cash += f.cash; this.s.equity *= 1 - f.dilution; this.s.funding++;
     this.log(`Raised ${f.name}: ${fmtMoney(f.cash)} for ${Math.round(f.dilution * 100)}% of the company.`);
   }
-
-  buyDesk() {
-    const c = this.deskCost();
-    if (!this.has('coworking') || this.s.cash < c) return;
-    this.s.cash -= c; this.s.desksBought++;
-  }
+  buyDesk() { const c = this.deskCost(); if (this.has('coworking') && this.s.cash >= c) { this.s.cash -= c; this.s.desksBought++; } }
   leaseFloor() {
     if (!this.has('office') || this.s.cash < D.OFFICE_FLOOR.cost) return;
     this.s.cash -= D.OFFICE_FLOOR.cost; this.s.floors++;
     this.log('Signed a 10-year lease. Bean bags arrive Tuesday.');
   }
 
-  newTeam() {
-    if (!this.has('incorporate') || this.s.teams.length >= this.maxTeams()) return;
-    const id = this.s.nextTeamId++;
-    this.s.teams.push({ id, name: TEAM_NAMES[(id - 1) % TEAM_NAMES.length], eng: 0, qa: 0, ops: 0, mgr: 0 });
-  }
-  maxTeams() { return 1 + Math.floor(this.headcount() / 4); }
-  hire(teamId: number, r: Role) {
-    const t = this.s.teams.find(x => x.id === teamId);
-    if (!t || !this.roleUnlocked(r) || this.headcount() >= this.desks() || this.s.cash < D.ROLES[r].fee) return;
-    this.s.cash -= D.ROLES[r].fee; t[r]++;
-  }
-  fire(teamId: number, r: Role) {
-    const t = this.s.teams.find(x => x.id === teamId);
-    if (!t || t[r] <= 0) return;
-    t[r]--;
-  }
-  disband(teamId: number) {
-    const t = this.s.teams.find(x => x.id === teamId);
-    if (!t || this.teamSize(t) > 0) return;
-    this.s.teams = this.s.teams.filter(x => x !== t);
-    for (const sv of Object.values(this.s.services)) if (sv.team === teamId) sv.team = null;
-  }
-
-  build(id: string) {
-    const c = this.serviceCost(id);
-    if (!this.serviceUnlocked(id) || this.s.sloc < c) return;
-    this.s.sloc -= c;
-    const sv = this.s.services[id];
-    if (sv) { sv.level++; return; }
-    const free = this.s.teams.find(t => this.teamOwned(t) < this.teamCapacity(t));
-    this.s.services[id] = { level: 1, team: free?.id ?? null };
-    this.log(`Shipped ${D.SERVICES[id].name}.`);
-  }
-  assign(id: string, teamId: number | null) { const sv = this.s.services[id]; if (sv) sv.team = teamId; }
-
-  refactorCost() { return this.s.debt * 0.5; }
-  refactor() {
-    const c = this.refactorCost();
-    if (this.s.debt < 1 || this.s.sloc < c) return;
-    this.s.sloc -= c; this.s.debt = 0;
-    this.log('Rewrote it all from scratch. This time it will be different.');
-  }
-
   // ---- exits ----
   valuation() {
-    const r = this.rates();
     const perUser = this.s.era === 'dotcom' ? 400 : 50; // eyeballs!
-    return this.s.users * perUser + Math.max(0, r.revenue) * 365 * 10 + this.s.hype * 100;
+    return this.s.users * perUser + Math.max(0, this.rates().revenue) * 3650 + this.s.hype * 100;
   }
+  talent() { return this.s.workers.reduce((n, w) => n + Object.values(w.skills).reduce((a, b) => a + b!, 0)!, 0); }
   canExit(kind: 'acquihire' | 'ipo') {
-    if (kind === 'acquihire') return this.s.funding >= 2 && this.headcount() >= 5;
-    return this.has('goldman') && this.s.funding >= 5;
+    return kind === 'acquihire' ? this.s.funding >= 2 && this.headcount() >= 5 : this.has('goldman') && this.s.funding >= 5;
   }
   exitTake(kind: 'acquihire' | 'ipo' | 'bankrupt') {
     if (kind === 'bankrupt') return 0;
-    const value = kind === 'ipo' ? this.valuation() : this.headcount() * 150000;
-    return value * this.s.equity;
+    return (kind === 'ipo' ? this.valuation() : this.talent() * 80000) * this.s.equity;
   }
   reputationFor(kind: 'acquihire' | 'ipo' | 'bankrupt') {
     if (kind === 'bankrupt') return this.s.funding > 0 ? 1 : 0;
-    return Math.floor(Math.sqrt(this.exitTake(kind) / 100000));
+    return Math.floor(Math.sqrt(this.exitTake(kind) / 200000));
   }
   exit(kind: 'acquihire' | 'ipo' | 'bankrupt') {
     if (kind !== 'bankrupt' && !this.canExit(kind)) return;
@@ -249,13 +356,15 @@ export class Game {
   static load(): Game {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
-      if (raw) return new Game({ ...newState(), ...JSON.parse(raw) });
+      const s = raw && JSON.parse(raw);
+      if (s && s.version === SAVE_VERSION) return new Game({ ...newState(), ...s });
     } catch { /* ignore */ }
     return new Game();
   }
   exportSave() { return btoa(unescape(encodeURIComponent(JSON.stringify(this.s)))); }
   importSave(str: string) {
     const s = JSON.parse(decodeURIComponent(escape(atob(str.trim()))));
+    if (s.version !== SAVE_VERSION) throw new Error('old save');
     this.s = { ...newState(), ...s };
   }
   reset() { this.s = newState(); try { localStorage.removeItem(SAVE_KEY); } catch { /* ignore */ } }
@@ -264,8 +373,8 @@ export class Game {
     const secs = Math.min((Date.now() - this.s.lastSaved) / 1000, 8 * 3600);
     if (secs < 5) return 0;
     const before = this.s.exits;
-    let left = secs;
-    while (left > 0 && this.s.exits === before) { const dt = Math.min(1, left); this.tick(dt); left -= dt; }
+    let left = secs * D.DAYS_PER_SECOND;
+    while (left > 0 && this.s.exits === before) { const dt = Math.min(0.5, left); this.tick(dt); left -= dt; }
     return secs;
   }
 }
